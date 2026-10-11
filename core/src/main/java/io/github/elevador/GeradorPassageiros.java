@@ -16,7 +16,7 @@ public class GeradorPassageiros implements Runnable {
 
     private volatile boolean ativo = true;
     private volatile boolean autoSpawnHabilitado = true;
-    private volatile long intervaloMedioMs = 2800; // intervalo médio entre chegadas
+    private volatile long intervaloMedioMs = Config.INTERVALO_GERACAO_MS;
 
     public GeradorPassageiros(Predio predio) {
         this.predio = predio;

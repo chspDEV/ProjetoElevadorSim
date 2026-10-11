@@ -301,8 +301,8 @@ public class Predio {
     private void atualizarPosicoesFilaNoAndar(int andar) {
         int idx = 0;
         for (Passageiro p : filasPorAndar[andar]) {
-            float targetX = 370f + idx * 52f;
-            float targetY = 25f + andar * 90f + 14f;
+            float targetX = Config.FILA_X_INICIAL + idx * Config.FILA_ESPACAMENTO_X;
+            float targetY = Config.calcularYPassageiroNoAndar(andar);
             p.setTargetX(targetX);
             p.setTargetY(targetY);
             if (p.getPosX() > 1100f) {

@@ -52,21 +52,21 @@ public class Elevador implements Runnable {
     private volatile float aberturaPorta = 0.0f; // 0.0f (fechada) a 1.0f (totalmente aberta)
     private volatile boolean emTransito = false;
 
-    // Coordenadas visuais contínuas para renderização gráfica
+    // Coordenadas visuais continuas para renderizacao grafica
     private volatile float posicaoY;
-    private final float posicaoX = 145f;
-    private final float largura = 120f;
-    private final float altura = 86f;
+    private final float posicaoX = Config.ELEVADOR_X;
+    private final float largura = Config.ELEVADOR_LARGURA;
+    private final float altura = Config.ELEVADOR_ALTURA;
 
     // Passageiros atualmente dentro do elevador
     private final List<Passageiro> passageirosABordo = new ArrayList<>();
 
-    // Estatísticas
+    // Estatisticas
     private volatile int totalPassageirosTransportados = 0;
 
-    // Configuração de velocidade (pixels por segundo) e tempo de porta (segundos)
-    private volatile float velocidadePixelsPorSegundo = 220f;
-    private volatile float tempoTransicaoPortaSegundos = 0.45f;
+    // Configuracao de velocidade (pixels por segundo) e tempo de porta (segundos)
+    private volatile float velocidadePixelsPorSegundo = Config.VELOCIDADE_PADRAO_PIXELS_SEG;
+    private volatile float tempoTransicaoPortaSegundos = Config.TEMPO_TRANSICAO_PORTA_SEG;
 
     public Elevador(Predio predio, int capacidade, int andarInicial) {
         this.predio = predio;
@@ -349,7 +349,7 @@ public class Elevador implements Runnable {
     }
 
     private float calcularYDoAndar(int andar) {
-        return 25f + andar * 90f;
+        return Config.calcularYAndar(andar);
     }
 
     // =========================================================================

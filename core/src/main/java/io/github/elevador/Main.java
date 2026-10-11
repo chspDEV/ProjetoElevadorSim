@@ -3,94 +3,66 @@ package io.github.elevador;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import java.io.File;
 import java.util.List;
 
 /**
- * Aplicação gráfica principal em LibGDX para simulação do elevador multithread.
- * 
- * Requisitos e destaques:
- * - Resolução 1280x720 ajustada ao cenário do prédio.
- * - Instanciação única da classe Prédio (que cria e inicializa o Elevador).
- * - Renderização do elevador se deslocando entre os andares (0 a 7).
- * - Portas do elevador abrindo e fechando com animação visual clara.
- * - Interior do elevador iluminado com passageiros visíveis a bordo (Capacidade > 1 com pontuação extra!).
- * - Fila de passageiros nos andares com crachá visual do andar de destino sobre a cabeça.
- * - Animação de pedestres embarcando e desembarcando.
- * - Painel de telemetria lateral com status de concorrência, semáforos, ocupação e controles interativos.
- * - Controles por teclado e clique do mouse para gerar passageiros e testar cenários.
+ * Aplicacao grafica principal em LibGDX para simulacao do elevador multithread.
+ * Utiliza a classe estatica Config para todos os parametros de ajustes finos:
+ * dimensoes de sprites, posicoes de elementos, textos e escalas de fontes.
  */
 public class Main extends ApplicationAdapter {
 
-    // Constantes do Prédio e Elevador
-    private static final int TOTAL_ANDARES = 8;        // F = 8 andares (0 a 7), satisfaz F > 5
-    private static final int CAPACIDADE_PADRAO = 4;    // Capacidade > 1 (Bonificação Extra)
-    private static final int ANDAR_INICIAL = 0;
-
-    // Modelos concorrentes
     private Predio predio;
     private Elevador elevador;
     private GeradorPassageiros gerador;
 
-    // Recursos gráficos do LibGDX
     private SpriteBatch batch;
     private ShapeRenderer shapeRenderer;
     private BitmapFont fontPadrao;
-    private BitmapFont fontTitulo;
+    private BitmapFont fontCategoria;
     private BitmapFont fontPequena;
-    private GlyphLayout glyphLayout;
 
-    // Texturas e Regiões
     private Texture texFundo;
     private Texture texElevador;
+    private Texture texPorta;
+    private TextureRegion regPortaEsq;
+    private TextureRegion regPortaDir;
     private TextureRegion regElevadorTopo;
     private TextureRegion regElevadorEsq;
     private TextureRegion regElevadorDir;
     private Texture[] texPessoas;
 
-    // Controle de tempo para animações
     private float tempoAnimacao = 0f;
     private boolean pausado = false;
     private float multiplicadorVelocidade = 1.0f;
 
-    /**
-     * Resolve arquivos de assets de forma resiliente em qualquer ambiente:
-     * - Execução no Eclipse (working directory na raiz do projeto ou no submódulo)
-     * - Execução via Gradle (working directory em assets/)
-     * - Execução via JAR empacotado ou Classpath
-     */
     public static FileHandle resolverArquivo(String caminho) {
-        // 1. Tenta direto (working directory = assets/)
         FileHandle fh = Gdx.files.internal(caminho);
         if (fh.exists()) return fh;
 
-        // 2. Tenta dentro da subpasta assets/ (working directory = raiz do projeto)
         fh = Gdx.files.internal("assets/" + caminho);
         if (fh.exists()) return fh;
 
-        // 3. Tenta ../assets/ (working directory = lwjgl3/ ou core/)
         fh = Gdx.files.internal("../assets/" + caminho);
         if (fh.exists()) return fh;
 
-        // 4. Tenta classpath
         fh = Gdx.files.classpath(caminho);
         if (fh.exists()) return fh;
 
         fh = Gdx.files.classpath("assets/" + caminho);
         if (fh.exists()) return fh;
 
-        // 5. Busca dinâmica navegando os diretórios pais a partir de user.dir
         String userDir = System.getProperty("user.dir", ".");
         File current = new File(userDir);
         for (int depth = 0; depth < 5 && current != null && current.exists(); depth++) {
@@ -108,7 +80,6 @@ public class Main extends ApplicationAdapter {
             current = current.getParentFile();
         }
 
-        // Fallback padrão
         return Gdx.files.internal(caminho);
     }
 
@@ -116,23 +87,30 @@ public class Main extends ApplicationAdapter {
     public void create() {
         batch = new SpriteBatch();
         shapeRenderer = new ShapeRenderer();
-        glyphLayout = new GlyphLayout();
 
-        // Inicializa fontes
+        // Fontes configuradas pela classe Config (todas com a mesma cor branca)
         fontPadrao = new BitmapFont();
+        fontPadrao.getData().setScale(Config.ESCALA_FONTE_PADRAO);
         fontPadrao.setColor(Color.WHITE);
 
-        fontTitulo = new BitmapFont();
-        fontTitulo.getData().setScale(1.25f);
-        fontTitulo.setColor(new Color(0.3f, 0.85f, 1.0f, 1.0f));
+        fontCategoria = new BitmapFont();
+        fontCategoria.getData().setScale(Config.ESCALA_FONTE_CATEGORIA);
+        fontCategoria.setColor(Color.WHITE);
 
         fontPequena = new BitmapFont();
-        fontPequena.getData().setScale(0.85f);
-        fontPequena.setColor(Color.LIGHT_GRAY);
+        fontPequena.getData().setScale(Config.ESCALA_FONTE_PEQUENA);
+        fontPequena.setColor(Color.WHITE);
 
-        // Carrega as texturas dos assets usando resolução resiliente
+        // Texturas
         texFundo = new Texture(resolverArquivo("background1280x720.png"));
         texElevador = new Texture(resolverArquivo("elevador.png"));
+
+        // Sprite da porta adicionado pelo usuario (elevadorPorta.png)
+        texPorta = new Texture(resolverArquivo("elevadorPorta.png"));
+        regPortaEsq = new TextureRegion(texPorta);
+        regPortaDir = new TextureRegion(texPorta);
+        regPortaDir.flip(true, false);
+
         int ew = texElevador.getWidth();
         int eh = texElevador.getHeight();
         regElevadorTopo = new TextureRegion(texElevador, 0, 0, ew, (int) (eh * 0.22f));
@@ -144,15 +122,11 @@ public class Main extends ApplicationAdapter {
             texPessoas[i] = new Texture(resolverArquivo("pessoa" + (i + 1) + ".png"));
         }
 
-        // 1. Instância única da classe Prédio cria e inicializa o Elevador
-        // (requisito explícito do enunciado)
-        predio = new Predio(TOTAL_ANDARES, CAPACIDADE_PADRAO, ANDAR_INICIAL);
+        predio = new Predio(Config.TOTAL_ANDARES, Config.CAPACIDADE_PADRAO, Config.ANDAR_INICIAL);
         elevador = predio.getElevador();
 
-        // 2. Inicia a simulação com a thread do elevador
         predio.iniciarSimulacao();
 
-        // 3. Inicia o programa de teste gerador de passageiros em threads
         gerador = new GeradorPassageiros(predio);
         gerador.iniciar();
     }
@@ -166,384 +140,207 @@ public class Main extends ApplicationAdapter {
 
         processarEntradas();
 
-        // Limpa a tela
         ScreenUtils.clear(0.08f, 0.10f, 0.15f, 1f);
 
-        // 1. Desenha o fundo com os andares
+        // Fundo com os andares
         batch.begin();
-        batch.draw(texFundo, 0, 0, 1280, 720);
+        batch.draw(texFundo, 0, 0, Config.LARGURA_TELA, Config.ALTURA_TELA);
         batch.end();
 
-        // 2. Desenha elementos geométricos (painel lateral, interior do elevador, portas, badges)
+        // Elementos geometricos simples (fundo escuro plano para o painel e interior da cabine)
         desenharGeometria();
 
-        // 3. Desenha os sprites (passageiros e elevador) e textos (HUD e andares)
+        // Sprites e Textos
         desenharSpritesETextos();
     }
 
     private void processarEntradas() {
-        // [ESPAÇO] - Gerar passageiro aleatório
         if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
             gerador.criarPassageiroAleatorio();
         }
 
-        // [0] a [7] - Gerar passageiro no andar específico
-        for (int i = 0; i < TOTAL_ANDARES; i++) {
+        for (int i = 0; i < Config.TOTAL_ANDARES; i++) {
             if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_0 + i)) {
                 gerador.criarPassageiroNoAndar(i);
             }
         }
 
-        // [A] - Alternar Auto-Spawn
         if (Gdx.input.isKeyJustPressed(Input.Keys.A)) {
             gerador.alternarAutoSpawn();
         }
 
-        // [P] - Pausar / Continuar
         if (Gdx.input.isKeyJustPressed(Input.Keys.P)) {
             pausado = !pausado;
         }
 
-        // [+] / [-] - Ajustar velocidade
         if (Gdx.input.isKeyJustPressed(Input.Keys.PLUS) || Gdx.input.isKeyJustPressed(Input.Keys.EQUALS)) {
             multiplicadorVelocidade = Math.min(3.0f, multiplicadorVelocidade + 0.25f);
             elevador.setVelocidadeMultiplicador(multiplicadorVelocidade);
-            gerador.setIntervaloMedioMs((long) (2800 / multiplicadorVelocidade));
+            gerador.setIntervaloMedioMs((long) (Config.INTERVALO_GERACAO_MS / multiplicadorVelocidade));
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.MINUS)) {
             multiplicadorVelocidade = Math.max(0.5f, multiplicadorVelocidade - 0.25f);
             elevador.setVelocidadeMultiplicador(multiplicadorVelocidade);
-            gerador.setIntervaloMedioMs((long) (2800 / multiplicadorVelocidade));
+            gerador.setIntervaloMedioMs((long) (Config.INTERVALO_GERACAO_MS / multiplicadorVelocidade));
         }
 
-        // Clique do mouse nos andares para gerar passageiro naquele andar
         if (Gdx.input.justTouched()) {
             float mouseX = Gdx.input.getX();
-            float mouseY = 720 - Gdx.input.getY();
+            float mouseY = Config.ALTURA_TELA - Gdx.input.getY();
 
-            // Área das plataformas dos andares
             if (mouseX >= 350 && mouseX <= 980 && mouseY >= 25 && mouseY <= 710) {
-                int andarClicado = (int) ((mouseY - 20) / 90);
-                if (andarClicado >= 0 && andarClicado < TOTAL_ANDARES) {
+                int andarClicado = (int) ((mouseY - Config.Y_BASE_ANDAR_0) / Config.ESPACAMENTO_ANDAR);
+                if (andarClicado >= 0 && andarClicado < Config.TOTAL_ANDARES) {
                     gerador.criarPassageiroNoAndar(andarClicado);
                 }
-            }
-
-            // Clique no botão Auto-Spawn no painel
-            if (mouseX >= 1020 && mouseX <= 1260 && mouseY >= 110 && mouseY <= 140) {
-                gerador.alternarAutoSpawn();
             }
         }
     }
 
-    /**
-     * Renderização de formas (ShapeRenderer):
-     * - Fundo translúcido do painel de telemetria
-     * - Cabine interna iluminada do elevador quando as portas abrem
-     * - Folhas de porta se abrindo/fechando
-     * - Balões de destino dos passageiros
-     */
     private void desenharGeometria() {
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
 
-        // --- PAINEL LATERAL DE MONITORAMENTO ---
-        shapeRenderer.setColor(0.06f, 0.09f, 0.16f, 0.88f);
-        shapeRenderer.rect(1005, 15, 260, 690);
+        // Painel lateral a direita: plano, solido, simples e sem firula
+        shapeRenderer.setColor(0.12f, 0.12f, 0.14f, 0.95f);
+        shapeRenderer.rect(Config.PAINEL_BG_X, Config.PAINEL_BG_Y, Config.PAINEL_BG_LARGURA, Config.PAINEL_BG_ALTURA);
 
-        // Barra de progresso / ocupação de capacidade
-        float barX = 1025;
-        float barY = 460;
-        float barW = 220;
-        float barH = 16;
-        shapeRenderer.setColor(0.15f, 0.2f, 0.3f, 1f);
-        shapeRenderer.rect(barX, barY, barW, barH);
-
-        int aBordo = elevador.getQuantidadePassageiros();
-        int cap = elevador.getCapacidade();
-        float fracCap = (float) aBordo / cap;
-        shapeRenderer.setColor(fracCap < 0.75f ? new Color(0.2f, 0.8f, 0.4f, 1f) : new Color(1.0f, 0.5f, 0.2f, 1f));
-        shapeRenderer.rect(barX, barY, barW * fracCap, barH);
-
-        // Botão Auto-Spawn
-        boolean auto = gerador.isAutoSpawnHabilitado();
-        shapeRenderer.setColor(auto ? new Color(0.15f, 0.5f, 0.25f, 0.9f) : new Color(0.5f, 0.2f, 0.2f, 0.9f));
-        shapeRenderer.rect(1020, 110, 230, 28);
-
-        // --- INTERIOR DA CABINE DO ELEVADOR (QUANDO PORTA ABERTA OU ABRINDO) ---
+        // Interior da cabine do elevador
         float elevX = elevador.getPosicaoX();
         float elevY = elevador.getPosicaoY();
-        float abertura = elevador.getAberturaPorta();
-
-        if (abertura > 0.02f) {
-            // Fundo iluminado da cabine interna
-            shapeRenderer.setColor(0.85f, 0.86f, 0.88f, 1.0f);
-            shapeRenderer.rect(elevX + 18, elevY + 4, 84, 72);
-
-            // Piso da cabine
-            shapeRenderer.setColor(0.25f, 0.28f, 0.35f, 1.0f);
-            shapeRenderer.rect(elevX + 18, elevY + 4, 84, 8);
-
-            // Teto iluminado
-            shapeRenderer.setColor(1.0f, 0.98f, 0.80f, 0.6f);
-            shapeRenderer.rect(elevX + 22, elevY + 70, 76, 5);
-        }
-
-        // --- BALÕES DE DESTINO DOS PASSAGEIROS AGUARDANDO NOS ANDARES ---
-        for (int i = 0; i < TOTAL_ANDARES; i++) {
-            List<Passageiro> fila = predio.getPassageirosNaFila(i);
-            for (Passageiro p : fila) {
-                desenharBalaoPassageiro(p);
-            }
-        }
-
-        shapeRenderer.end();
-
-        // --- BORDAS E LINHAS DECORATIVAS ---
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(0.25f, 0.60f, 0.95f, 0.65f);
-        shapeRenderer.rect(1005, 15, 260, 690);
-
-        shapeRenderer.setColor(0.2f, 0.7f, 0.9f, 0.8f);
-        shapeRenderer.rect(1020, 110, 230, 28);
-
-        // Se a porta estiver aberta ou em transição, desenha os painéis da porta deslizando
-        if (abertura > 0.0f) {
-            float portaW = 38f;
-            float deslocamento = portaW * abertura;
-
-            // Painel esquerdo deslizando para a esquerda
-            shapeRenderer.setColor(0.65f, 0.68f, 0.72f, 1.0f);
-            shapeRenderer.rect(elevX + 22 - deslocamento, elevY + 8, portaW, 66);
-
-            // Painel direito deslizando para a direita
-            shapeRenderer.rect(elevX + 60 + deslocamento, elevY + 8, portaW, 66);
-        }
+        shapeRenderer.setColor(0.78f, 0.78f, 0.80f, 1.0f);
+        shapeRenderer.rect(elevX + Config.CABINE_OFFSET_X, elevY + Config.CABINE_OFFSET_Y, Config.CABINE_LARGURA, Config.CABINE_ALTURA);
 
         shapeRenderer.end();
         Gdx.gl.glDisable(GL20.GL_BLEND);
     }
 
-    private void desenharBalaoPassageiro(Passageiro p) {
-        float px = p.getPosX();
-        float py = p.getPosY() + 52f;
-        // Fundo do balãozinho de destino
-        shapeRenderer.setColor(0.12f, 0.18f, 0.28f, 0.92f);
-        shapeRenderer.rect(px - 14, py, 60, 18);
-        // Indicador de cor do destino
-        shapeRenderer.setColor(0.3f, 0.8f, 1.0f, 1.0f);
-        shapeRenderer.rect(px - 14, py, 4, 18);
-    }
-
-    /**
-     * Renderização de Sprites e Textos com SpriteBatch:
-     */
     private void desenharSpritesETextos() {
         batch.begin();
 
-        // 1. DESENHA O ELEVADOR
         float elevX = elevador.getPosicaoX();
         float elevY = elevador.getPosicaoY();
+        float elevW = elevador.getLargura();
+        float elevH = elevador.getAltura();
         float abertura = elevador.getAberturaPorta();
 
-        if (abertura <= 0.05f) {
-            // Porta totalmente fechada: desenha o sprite completo do elevador
-            batch.draw(texElevador, elevX, elevY, elevador.getLargura(), elevador.getAltura());
-        } else {
-            // Porta aberta: passageiros a bordo são desenhados dentro da cabine
-            List<Passageiro> aBordo = elevador.getCopiaPassageirosABordo();
-            for (Passageiro p : aBordo) {
-                int spriteIdx = Math.max(0, Math.min(5, p.getSpriteIndex() - 1));
-                batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY(), 36, 46);
-
-                // Mostra andar de destino sobre a cabeça do passageiro a bordo
-                fontPequena.setColor(Color.YELLOW);
-                fontPequena.draw(batch, "->" + p.getAndarDestino(), p.getPosX() + 4, p.getPosY() + 56);
-            }
-
-            // Moldura externa do elevador (topo e laterais)
-            batch.setColor(1f, 1f, 1f, 0.95f);
-            batch.draw(regElevadorTopo, elevX, elevY + 68, 120, 18);
-            batch.draw(regElevadorEsq, elevX, elevY, 22, 86);
-            batch.draw(regElevadorDir, elevX + 98, elevY, 22, 86);
-            batch.setColor(Color.WHITE);
+        // 1. DESENHA OS PASSAGEIROS DENTRO DA CABINE
+        List<Passageiro> aBordo = elevador.getCopiaPassageirosABordo();
+        for (Passageiro p : aBordo) {
+            int spriteIdx = Math.max(0, Math.min(5, p.getSpriteIndex() - 1));
+            batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY(), Config.PASSAGEIRO_CABINE_LARGURA, Config.PASSAGEIRO_CABINE_ALTURA);
+            fontPequena.setColor(Color.WHITE);
+            fontPequena.draw(batch, Config.TEXTO_DESTINO_PREFIXO + p.getAndarDestino(),
+                    p.getPosX() + Config.TEXTO_DESTINO_CABINE_OFFSET_X,
+                    p.getPosY() + Config.TEXTO_DESTINO_CABINE_OFFSET_Y);
         }
 
-        // 2. INDICADORES LUMINOSOS DE DIREÇÃO NO ELEVADOR
-        if (elevador.getDirecao() == Elevador.Direcao.SUBINDO) {
-            float pulso = 0.6f + 0.4f * (float) Math.sin(tempoAnimacao * 8);
-            fontPadrao.setColor(0.3f, 1.0f, 0.3f, pulso);
-            fontPadrao.draw(batch, "▲", elevX + 35, elevY + 78);
-        } else if (elevador.getDirecao() == Elevador.Direcao.DESCENDO) {
-            float pulso = 0.6f + 0.4f * (float) Math.sin(tempoAnimacao * 8);
-            fontPadrao.setColor(1.0f, 0.3f, 0.3f, pulso);
-            fontPadrao.draw(batch, "▼", elevX + 75, elevY + 78);
-        }
+        // 2. DESENHA AS PORTAS DESLIZANDO (USANDO O SPRITE elevadorPorta.png)
+        float slide = Config.PORTA_SLIDE_MAX * abertura;
+        batch.draw(regPortaEsq, elevX - slide, elevY, elevW, elevH);
+        batch.draw(regPortaDir, elevX + slide, elevY, elevW, elevH);
 
-        // 3. DESENHA OS PASSAGEIROS NAS FILAS DOS ANDARES
-        for (int i = 0; i < TOTAL_ANDARES; i++) {
+        // 3. DESENHA A MOLDURA EXTERNA DO ELEVADOR (TOPO E LATERAIS)
+        batch.draw(regElevadorTopo, elevX, elevY + Config.MOLDURA_TOPO_OFFSET_Y, Config.MOLDURA_TOPO_LARGURA, Config.MOLDURA_TOPO_ALTURA);
+        batch.draw(regElevadorEsq, elevX, elevY, Config.MOLDURA_ESQ_LARGURA, Config.MOLDURA_ESQ_ALTURA);
+        batch.draw(regElevadorDir, elevX + Config.MOLDURA_DIR_OFFSET_X, elevY, Config.MOLDURA_DIR_LARGURA, Config.MOLDURA_DIR_ALTURA);
+
+        // 4. DESENHA OS PASSAGEIROS NAS FILAS DOS ANDARES
+        for (int i = 0; i < Config.TOTAL_ANDARES; i++) {
             List<Passageiro> fila = predio.getPassageirosNaFila(i);
             for (Passageiro p : fila) {
                 int spriteIdx = Math.max(0, Math.min(5, p.getSpriteIndex() - 1));
-
-                // Efeito suave de respiração/caminhada
                 float bobY = (p.getEstado() == Passageiro.Estado.EMBARCANDO || p.getEstado() == Passageiro.Estado.DESEMBARCANDO)
                         ? (float) Math.sin(tempoAnimacao * 14) * 3f
                         : 0f;
 
-                batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY() + bobY, 42, 52);
+                batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY() + bobY, Config.PASSAGEIRO_LARGURA, Config.PASSAGEIRO_ALTURA);
 
-                // Texto do crachá do andar de destino
-                fontPequena.setColor(Color.CYAN);
-                fontPequena.draw(batch, "->" + p.getAndarDestino(), p.getPosX() - 6, p.getPosY() + 65);
+                // Destino do passageiro em texto simples, mesma cor
+                fontPequena.setColor(Color.WHITE);
+                fontPequena.draw(batch, Config.TEXTO_DESTINO_PREFIXO + p.getAndarDestino(),
+                        p.getPosX() + Config.TEXTO_DESTINO_OFFSET_X,
+                        p.getPosY() + Config.TEXTO_DESTINO_OFFSET_Y);
             }
         }
 
-        // 4. DESENHA PASSAGEIROS EM PROCESSO DE DESEMBARQUE / CONCLUÍDOS RECENTES
+        // 5. PASSAGEIROS DESEMBARCANDO / CONCLUIDOS
         List<Passageiro> concluidos = predio.getCopiaPassageirosConcluidos();
         int startIndex = Math.max(0, concluidos.size() - 6);
         for (int i = startIndex; i < concluidos.size(); i++) {
             Passageiro p = concluidos.get(i);
             if (p.getEstado() == Passageiro.Estado.CONCLUIDO && p.getPosX() < 900f) {
                 int spriteIdx = Math.max(0, Math.min(5, p.getSpriteIndex() - 1));
-                batch.setColor(1f, 1f, 1f, 0.75f);
-                batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY(), 42, 52);
-                fontPequena.setColor(Color.GREEN);
-                fontPequena.draw(batch, "OK!", p.getPosX() + 8, p.getPosY() + 65);
-                batch.setColor(Color.WHITE);
+                batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY(), Config.PASSAGEIRO_LARGURA, Config.PASSAGEIRO_ALTURA);
             }
         }
 
-        // 5. RENDERIZAÇÃO DO PAINEL LATERAL (TELEMETRIA E CONTROLES)
+        // 6. PAINEL LATERAL A DIREITA (SEPARADO EM CATEGORIAS, MESMA COR BRANCA, SEM FIRULA)
         desenharPainelLateral();
 
         batch.end();
     }
 
     private void desenharPainelLateral() {
-        float x = 1018;
-        float y = 690;
+        float x = Config.PAINEL_TEXTO_X;
+        float y = Config.PAINEL_TEXTO_Y_INICIAL;
 
-        // Título Principal
-        fontTitulo.setColor(new Color(0.35f, 0.85f, 1.0f, 1.0f));
-        fontTitulo.draw(batch, "CONTROLE ELEVADOR", x + 5, y);
-        y -= 22;
+        // Titulo
+        fontCategoria.setColor(Color.WHITE);
+        fontCategoria.draw(batch, Config.TITULO_APLICACAO, x, y);
+        y -= Config.ESPACAMENTO_ENTRE_CATEGORIAS;
 
-        fontPequena.setColor(Color.LIGHT_GRAY);
-        fontPequena.draw(batch, "Sistemas Multithread & Semáforos", x + 5, y);
-        y -= 25;
-
-        // Linha divisória estética
-        fontPequena.setColor(new Color(0.25f, 0.45f, 0.7f, 0.8f));
-        fontPequena.draw(batch, "---------------------------------", x + 5, y);
-        y -= 20;
-
-        // STATUS DO ELEVADOR
-        fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, "Andar Atual: ", x + 5, y);
-        fontTitulo.setColor(Color.YELLOW);
-        fontTitulo.draw(batch, "" + elevador.getAndarAtual(), x + 115, y + 2);
-        y -= 28;
+        // CATEGORIA: ELEVADOR
+        fontCategoria.setColor(Color.WHITE);
+        fontCategoria.draw(batch, Config.CATEGORIA_ELEVADOR, x, y);
+        y -= Config.ESPACAMENTO_TITULO_CATEGORIA;
 
         fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, "Direção: ", x + 5, y);
-        Elevador.Direcao dir = elevador.getDirecao();
-        if (dir == Elevador.Direcao.SUBINDO) {
-            fontPadrao.setColor(Color.GREEN);
-            fontPadrao.draw(batch, "SUBINDO ▲", x + 85, y);
-        } else if (dir == Elevador.Direcao.DESCENDO) {
-            fontPadrao.setColor(new Color(1f, 0.4f, 0.3f, 1f));
-            fontPadrao.draw(batch, "DESCENDO ▼", x + 85, y);
-        } else {
-            fontPadrao.setColor(Color.GRAY);
-            fontPadrao.draw(batch, "PARADO ■", x + 85, y);
-        }
-        y -= 26;
+        fontPadrao.draw(batch, Config.TEXTO_ANDAR_ATUAL + elevador.getAndarAtual(), x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
+
+        fontPadrao.draw(batch, Config.TEXTO_ESTADO_PORTA + elevador.getEstadoPorta(), x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
+
+        fontPadrao.draw(batch, Config.TEXTO_DIRECAO + elevador.getDirecao(), x, y);
+        y -= Config.ESPACAMENTO_ENTRE_CATEGORIAS;
+
+        // CATEGORIA: PASSAGEIROS
+        fontCategoria.setColor(Color.WHITE);
+        fontCategoria.draw(batch, Config.CATEGORIA_PASSAGEIROS, x, y);
+        y -= Config.ESPACAMENTO_TITULO_CATEGORIA;
 
         fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, "Portas: ", x + 5, y);
-        Elevador.EstadoPorta estPorta = elevador.getEstadoPorta();
-        if (estPorta == Elevador.EstadoPorta.ABERTA) {
-            fontPadrao.setColor(Color.GREEN);
-        } else if (estPorta == Elevador.EstadoPorta.FECHADA) {
-            fontPadrao.setColor(Color.CYAN);
-        } else {
-            fontPadrao.setColor(Color.ORANGE);
-        }
-        fontPadrao.draw(batch, estPorta.name(), x + 75, y);
-        y -= 28;
+        fontPadrao.draw(batch, Config.TEXTO_PASSAGEIROS + elevador.getQuantidadePassageiros() + " / " + elevador.getCapacidade(), x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
 
-        // Ocupação do Elevador (Buffer)
-        fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, "Ocupação: ", x + 5, y);
-        fontPadrao.setColor(Color.YELLOW);
-        fontPadrao.draw(batch, elevador.getQuantidadePassageiros() + " / " + elevador.getCapacidade() + " pessoas", x + 95, y);
-        y -= 38; // compensa a barra desenhada no shapeRenderer
+        fontPadrao.draw(batch, Config.TEXTO_TRANSPORTADOS + elevador.getTotalPassageirosTransportados(), x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
 
-        // Tag de Bonificação
-        fontPequena.setColor(new Color(0.3f, 1.0f, 0.5f, 1.0f));
-        fontPequena.draw(batch, "[★ BÔNUS: CAPACIDADE > 1 ATIVADO]", x + 5, y);
-        y -= 24;
+        fontPadrao.draw(batch, Config.TEXTO_FILA_PREDIO + predio.getTotalPassageirosEmEspera(), x, y);
+        y -= Config.ESPACAMENTO_ENTRE_CATEGORIAS;
 
-        // Passageiros a Bordo
-        fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, "Passageiros a bordo:", x + 5, y);
-        y -= 20;
-
-        List<Passageiro> aBordo = elevador.getCopiaPassageirosABordo();
-        if (aBordo.isEmpty()) {
-            fontPequena.setColor(Color.GRAY);
-            fontPequena.draw(batch, "(cabine vazia)", x + 20, y);
-            y -= 20;
-        } else {
-            for (Passageiro p : aBordo) {
-                fontPequena.setColor(Color.WHITE);
-                fontPequena.draw(batch, "• #" + p.getId() + " (Origem: " + p.getAndarOrigem() + " -> Dest: " + p.getAndarDestino() + ")", x + 15, y);
-                y -= 18;
-            }
-        }
-
-        y -= 10;
-        fontPequena.setColor(new Color(0.25f, 0.45f, 0.7f, 0.8f));
-        fontPequena.draw(batch, "---------------------------------", x + 5, y);
-        y -= 20;
-
-        // ESTATÍSTICAS
-        fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, "Fila no Prédio:", x + 5, y);
-        fontPadrao.setColor(Color.ORANGE);
-        fontPadrao.draw(batch, "" + predio.getTotalPassageirosEmEspera() + " pessoas", x + 130, y);
-        y -= 24;
+        // CATEGORIA: ATALHOS
+        fontCategoria.setColor(Color.WHITE);
+        fontCategoria.draw(batch, Config.CATEGORIA_ATALHOS, x, y);
+        y -= Config.ESPACAMENTO_TITULO_CATEGORIA;
 
         fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, "Transportados:", x + 5, y);
-        fontPadrao.setColor(Color.GREEN);
-        fontPadrao.draw(batch, "" + elevador.getTotalPassageirosTransportados() + " pessoas", x + 130, y);
-        y -= 26;
+        fontPadrao.draw(batch, Config.ATALHO_ESPACO, x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
 
-        fontPequena.setColor(new Color(0.4f, 0.9f, 0.9f, 1f));
-        fontPequena.draw(batch, "Sincronização: 100% Semaphore", x + 5, y);
-        y -= 18;
-        fontPequena.draw(batch, "Restrição: Zero synchronized", x + 5, y);
-        y -= 26;
+        fontPadrao.draw(batch, Config.ATALHO_NUMEROS, x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
 
-        // BOTÃO AUTO-SPAWN
-        boolean auto = gerador.isAutoSpawnHabilitado();
-        fontPadrao.setColor(Color.WHITE);
-        fontPadrao.draw(batch, auto ? "[A] Auto-Spawn: LIGADO" : "[A] Auto-Spawn: PAUSADO", x + 20, 128);
+        fontPadrao.draw(batch, Config.ATALHO_SPAWN, x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
 
-        // CONTROLES DE TECLADO
-        float cy = 96;
-        fontPequena.setColor(Color.LIGHT_GRAY);
-        fontPequena.draw(batch, "[ESPAÇO] Criar passageiro aleatório", x + 5, cy);
-        cy -= 18;
-        fontPequena.draw(batch, "[0 a 7] Criar passageiro no andar", x + 5, cy);
-        cy -= 18;
-        fontPequena.draw(batch, "[Clique] Criar passageiro na plataforma", x + 5, cy);
-        cy -= 18;
-        fontPequena.draw(batch, "[P] Pausar | [+/-] Vel: " + String.format("%.2fx", multiplicadorVelocidade), x + 5, cy);
+        fontPadrao.draw(batch, Config.ATALHO_PAUSAR, x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
+
+        fontPadrao.draw(batch, Config.ATALHO_VELOCIDADE, x, y);
     }
 
     @Override
@@ -554,11 +351,12 @@ public class Main extends ApplicationAdapter {
         batch.dispose();
         shapeRenderer.dispose();
         fontPadrao.dispose();
-        fontTitulo.dispose();
+        fontCategoria.dispose();
         fontPequena.dispose();
 
         texFundo.dispose();
         texElevador.dispose();
+        if (texPorta != null) texPorta.dispose();
         for (Texture t : texPessoas) {
             if (t != null) t.dispose();
         }

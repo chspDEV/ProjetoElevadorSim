@@ -52,10 +52,10 @@ public class Passageiro implements Runnable {
         this.spriteIndex = spriteIndex;
         this.predio = predio;
 
-        // Posição inicial no andar de origem (fora da tela à direita, caminhando até a fila)
-        this.posY = 25f + andarOrigem * 90f + 14f;
+        // Posição inicial no andar de origem (calculada via Config)
+        this.posY = Config.calcularYPassageiroNoAndar(andarOrigem);
         this.posX = 1200f; 
-        this.targetX = 370f;
+        this.targetX = Config.FILA_X_INICIAL;
         this.targetY = this.posY;
 
         this.thread = new Thread(this, "Thread-" + nome);

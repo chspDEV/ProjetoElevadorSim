@@ -1,87 +1,86 @@
-# Simulador de Controle de Elevador Multithread
+# Simulador de Elevador
 
-**Processamento Multithread em CPU — Sincronização com Buffer de Tamanho N**
-
-Projeto desenvolvido em Java com interface gráfica utilizando [libGDX](https://libgdx.com/), totalmente configurado para execução no **Eclipse IDE**.
+Uma aplicação interativa de simulação de elevador predial multithread desenvolvida em **Java** e **libGDX**, demonstrando conceitos avançados de programação concorrente, sincronização estrita com semáforos (`java.util.concurrent.Semaphore`), gerenciamento de filas por andar, algoritmo de escalonamento livre de starvation e modelo produtor-consumidor com buffer de capacidade N.
 
 ---
 
-## 📋 Requisitos Atendidos
+## Funcionalidades Principais
 
-| Requisito do Enunciado | Implementação |
+- **Controle Multithread com Semáforos**:
+  - Sincronização estrita com a classe `Semaphore` sem uso da palavra-chave `synchronized`.
+  - Mutexes binários garantindo exclusão mútua e ausência de condições de corrida.
+- **Buffer de Capacidade N (Bonificação Extra)**:
+  - Cabine com capacidade para múltiplos passageiros simultâneos controlada via semáforo de vagas.
+- **Escalonamento Justo (Livre de Starvation)**:
+  - Algoritmo LOOK/SCAN que atende os andares na direção do movimento de forma ordenada.
+  - Filas FIFO por andar com semáforos justos (`fair = true`).
+- **Segurança Operacional**:
+  - Portas do elevador abrem apenas quando o elevador está completamente parado no andar.
+  - Movimentação entre andares ocorre estritamente com as portas fechadas.
+  - Embarque e desembarque sincronizados por sinalização individual.
+- **Painel Lateral em Tempo Real**:
+  - Monitoramento de andar atual, estado da porta e direção.
+  - Contagem de passageiros a bordo, transportados e filas de espera.
+- **Controle Interativo**:
+  - Geração manual de passageiros via teclado ou clique do mouse nos andares.
+  - Ajuste de velocidade da simulação física em tempo real.
+
+---
+
+## 🏗️ Arquitetura Concorrente
+
+| Componente | Papel Concorrente |
 | :--- | :--- |
-| **Prédio com F > 5 andares** | Implementado com **8 andares (0 a 7)** |
-| **Controle por Threads e Semáforos** | Uso estrito de `java.util.concurrent.Semaphore` |
-| **Restrição Estrita: Sem `synchronized`** | **ZERO métodos ou blocos `synchronized` no código** |
-| **Duas Classes Principais: `Elevador` e `Prédio`** | Classes `Elevador` e `Predio` implementadas conforme especificado |
-| **Métodos Internos** | `AbrirPorta()`, `FecharPorta()`, `VisitarAndar(int)` |
-| **Interface Externa para Passageiros** | `chamarElevador(Passageiro)`, `entrarElevador(Passageiro)`, `sairElevador(Passageiro)` |
-| **Instanciação Inicial** | Instância única de `Predio` cria e inicializa o `Elevador` |
-| **Thread do Elevador** | Loop independente executando em thread dedicada |
-| **Pedestres em Threads** | Cada pedestre/passageiro é uma thread individual com destino |
-| **Prevenção de Starvation** | Algoritmo LOOK/SCAN justo com semáforos justos (`fair = true`) |
-| **Prevenção de Condições de Corrida** | Portas nunca abrem em movimento; passageiros só embarcam/desembarcam com portas 100% abertas |
-| **Exibição Visual Completa** | Portas abrindo/fechando, cabine iluminada, passageiros a bordo, filas nos andares, crachás de destino |
-| **★ Bonificação Extra (Capacidade > 1)** | **Buffer de tamanho N implementado (Capacidade = 4)** com semáforo de vagas |
+| **`Passageiro`** | Executado em sua própria `Thread`. Aguarda permissão no semáforo de embarque, realiza a entrada no elevador, aguarda a chegada ao andar de destino e desembarca liberando vaga. |
+| **`Elevador`** | Executado em `Thread` dedicada. Controla o ciclo do elevador, movimentação física entre andares (`VisitarAndar`), transição das portas (`AbrirPorta`/`FecharPorta`) e buffer de vagas (`semVagas`). |
+| **`Predio`** | Coordena o estado do prédio, filas FIFO por andar e sincronização entre passageiros e elevador via semáforos binários (mutex) e semáforos de sinalização. |
+| **`GeradorPassageiros`** | Thread produtora que gera pedestres de forma autônoma e randômica com andares de origem e destino distintos. |
 
 ---
 
-## 🏗️ Arquitetura de Sincronização por Semáforos
+## Como Executar
 
-1. **Capacidade do Buffer (`semVagas = new Semaphore(capacidade, true)`)**:
-   - Controla o número de passageiros simultâneos na cabine (Buffer de tamanho N).
-   - Quando um passageiro embarca, consome 1 permissão do semáforo.
-   - Quando o passageiro desembarca no seu andar de destino, devolve 1 permissão.
+### Pré-requisitos
 
-2. **Exclusão Mútua (`mutexPredio` e `mutexElevador`)**:
-   - Semáforos binários (`new Semaphore(1, true)`) substituindo integralmente a palavra-chave `synchronized`.
-   - Garantem atomicidade no acesso às filas dos andares e variáveis de estado.
+- **Java JDK 8+** (ou 17+) instalado.
+- **Eclipse IDE** ou terminal com **Gradle** (incluso via wrapper `./gradlew`).
 
-3. **Sinalização Passageiro ⇄ Elevador**:
-   - Cada passageiro possui seus próprios semáforos: `semPodeEmbarcar`, `semEmbarqueConcluido`, `semPodeDesembarcar`, `semDesembarqueConcluido`.
-   - O elevador libera permissões apenas quando a porta está completamente aberta e o elevador está parado.
-   - O elevador aguarda a conclusão da movimentação física do passageiro antes de iniciar o fechamento da porta.
+### Execução no Eclipse
 
-4. **Notificação de Chamadas (`semNovasChamadas`)**:
-   - Quando não há passageiros no prédio nem a bordo, o elevador dorme no semáforo sem desperdiçar ciclos de CPU (sem busy waiting).
-
----
-
-## 🚀 Como Executar no Eclipse
-
-### Opção 1: Diretamente pelo Eclipse (Interface Gráfica)
-1. No Eclipse, clique com o botão direito no arquivo **`Lwjgl3Launcher.launch`** (na raiz do projeto).
+1. Clique com o botão direito no arquivo `Lwjgl3Launcher.launch` na raiz do projeto.
 2. Selecione **Run As → Lwjgl3Launcher**.
-3. A janela gráfica da simulação (1280x720) será aberta exibindo o prédio, elevador e passageiros!
+*(Ou execute a classe `io.github.elevador.lwjgl3.Lwjgl3Launcher.java` como Java Application).*
 
-> **Alternativa**: Abra `io.github.elevador.lwjgl3.Lwjgl3Launcher.java`, clique com o botão direito e escolha **Run As → Java Application**.
+### Comandos de Execução via Terminal
 
-### Opção 2: Teste em Console (Sem interface gráfica)
-1. Clique com o botão direito no arquivo **`ProgramaTesteConsole.launch`**.
-2. Selecione **Run As → ProgramaTesteConsole**.
-3. Os logs em tempo real das threads e semáforos serão impressos diretamente no console do Eclipse.
-
-### Opção 3: Via Linha de Comando (Gradle)
+**Linux / macOS:**
 ```bash
 ./gradlew lwjgl3:run
 ```
 
----
-
-## 🎮 Controles Interativos na Simulação
-
-- **`[ESPAÇO]`**: Gera um novo passageiro com andar de origem e destino aleatórios.
-- **`[0]` a `[7]`**: Gera um passageiro especificamente no andar pressionado.
-- **`[Clique na plataforma]`**: Clique com o mouse em qualquer andar do prédio para adicionar um passageiro naquele piso.
-- **`[A]`**: Liga ou pausa o gerador automático de passageiros (*Auto-Spawn*).
-- **`[P]`**: Pausa ou continua o tempo da simulação.
-- **`[+]` / `[-]`**: Aumenta ou diminui a velocidade da simulação física.
+**Windows:**
+```cmd
+gradlew.bat lwjgl3:run
+```
 
 ---
 
-## 📦 Formato de Entrega
+## 🎮 Controles
 
-1. **Arquivo compactado (.zip)**:
-   - Contém o projeto completo com todos os códigos fontes (`core`, `lwjgl3`) e arquivos de recursos (`assets`).
-2. **Vídeo demonstrativo (até 1 minuto)**:
-   - Apresente o elevador atendendo chamados, as portas abrindo e fechando, os passageiros entrando/saindo, e a capacidade simultânea > 1 funcionando sem starvation.
+| Tecla / Ação | Ação |
+| :---: | :--- |
+| <kbd>ESPAÇO</kbd> | Criar passageiro com origem e destino aleatórios |
+| <kbd>0</kbd> a <kbd>7</kbd> | Criar passageiro no andar correspondente |
+| <kbd>Clique no Andar</kbd> | Criar passageiro no piso clicado |
+| <kbd>A</kbd> | Alternar geração automática de passageiros (Auto-Spawn) |
+| <kbd>P</kbd> | Pausar / Continuar a simulação |
+| <kbd>+</kbd> / <kbd>-</kbd> | Acelerar / Desacelerar a velocidade da simulação |
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+- **Linguagem**: Java 8+ / 17+
+- **Framework Gráfico**: [libGDX](https://libgdx.com/) (LWJGL3 Backend)
+- **Sincronização**: `java.util.concurrent.Semaphore` (Zero uso de `synchronized`)
+- **Gerenciador de Dependências**: Gradle

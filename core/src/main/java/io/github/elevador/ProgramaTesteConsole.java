@@ -8,7 +8,7 @@ public class ProgramaTesteConsole {
 
     public static void main(String[] args) {
         System.out.println("===============================================================");
-        System.out.println("   SIMULADOR DE ELEVADOR - CONCORRÊNCIA COM SEMÁFOROS (JAVA)   ");
+        System.out.println("   SIMULADOR DE ELEVADOR                                       ");
         System.out.println("   - F = 8 andares (F > 5)                                     ");
         System.out.println("   - Capacidade = 4 passageiros (Bonificação Extra > 1)        ");
         System.out.println("   - Sincronização 100% via Semaphore                          ");
