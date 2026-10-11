@@ -3,10 +3,6 @@ package io.github.elevador;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Programa de teste / Gerador autônomo de passageiros.
- * Gera pedestres aleatórios em andares diversos, cada um com sua thread dedicada.
- */
 public class GeradorPassageiros implements Runnable {
 
     private final Predio predio;
@@ -34,7 +30,6 @@ public class GeradorPassageiros implements Runnable {
 
     @Override
     public void run() {
-        // Gera alguns passageiros iniciais para iniciar a simulação com movimento
         try {
             Thread.sleep(800);
             for (int i = 0; i < 4; i++) {
@@ -61,25 +56,34 @@ public class GeradorPassageiros implements Runnable {
         }
     }
 
-    /**
-     * Cria e inicia a thread de um passageiro com andar de origem e destino aleatórios.
-     */
     public Passageiro criarPassageiroAleatorio() {
         int totalAndares = predio.getTotalAndares();
-        int origem = random.nextInt(totalAndares);
+        java.util.List<Integer> andaresDisponiveis = new java.util.ArrayList<>();
+        for (int i = 0; i < totalAndares; i++) {
+            if (predio.podeAdicionarNaFila(i)) {
+                andaresDisponiveis.add(i);
+            }
+        }
+
+        if (andaresDisponiveis.isEmpty()) {
+            return null;
+        }
+
+        int origem = andaresDisponiveis.get(random.nextInt(andaresDisponiveis.size()));
         int destino;
         do {
             destino = random.nextInt(totalAndares);
         } while (destino == origem);
 
-        int spriteIndex = 1 + random.nextInt(6); // pessoa1 a pessoa6
+        int spriteIndex = 1 + random.nextInt(6);
         return criarPassageiro(origem, destino, spriteIndex);
     }
 
-    /**
-     * Cria e inicia um passageiro em um andar específico com destino aleatório.
-     */
     public Passageiro criarPassageiroNoAndar(int origem) {
+        if (!predio.podeAdicionarNaFila(origem)) {
+            return null;
+        }
+
         int totalAndares = predio.getTotalAndares();
         int destino;
         do {
@@ -90,13 +94,10 @@ public class GeradorPassageiros implements Runnable {
         return criarPassageiro(origem, destino, spriteIndex);
     }
 
-    /**
-     * Cria a instância do passageiro e inicia sua thread.
-     */
     public Passageiro criarPassageiro(int origem, int destino, int spriteIndex) {
         int id = proximoId.getAndIncrement();
         Passageiro p = new Passageiro(id, origem, destino, spriteIndex, predio);
-        p.iniciar(); // Inicia a thread dedicada do pedestre
+        p.iniciar();
         return p;
     }
 

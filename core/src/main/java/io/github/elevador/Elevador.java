@@ -5,18 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
-/**
- * Representa o elevador físico e seu controlador multithread.
- * 
- * Requisitos atendidos:
- * - Roda em uma thread separada com loop próprio.
- * - Invoca os métodos AbrirPorta(), FecharPorta(), VisitarAndar().
- * - Sincronização estrita via Semaphore (capacidade do buffer, mutexes, sinalização).
- * - ZERO métodos synchronized.
- * - Suporta capacidade > 1 (Bonificação Extra).
- * - Previne starvation usando algoritmo LOOK/SCAN.
- * - Previne condições de corrida (portas só abrem parado, trânsito apenas com portas fechadas).
- */
 public class Elevador implements Runnable {
 
     public enum EstadoPorta {
@@ -36,35 +24,25 @@ public class Elevador implements Runnable {
     private final int capacidade;
     private final Thread thread;
 
-    // Semáforo para controlar a capacidade do elevador (Buffer de tamanho N)
-    // Permite que até 'capacidade' passageiros estejam a bordo simultaneamente.
     private final Semaphore semVagas;
-
-    // Mutex baseado em Semáforo binário para proteger os dados internos do elevador
-    // Substitui rigorosamente a necessidade de synchronized!
     private final Semaphore mutexElevador = new Semaphore(1, true);
 
-    // Estado do elevador
     private volatile boolean executando = true;
     private volatile int andarAtual;
     private volatile Direcao direcao = Direcao.PARADO;
     private volatile EstadoPorta estadoPorta = EstadoPorta.FECHADA;
-    private volatile float aberturaPorta = 0.0f; // 0.0f (fechada) a 1.0f (totalmente aberta)
+    private volatile float aberturaPorta = 0.0f;
     private volatile boolean emTransito = false;
 
-    // Coordenadas visuais continuas para renderizacao grafica
     private volatile float posicaoY;
     private final float posicaoX = Config.ELEVADOR_X;
     private final float largura = Config.ELEVADOR_LARGURA;
     private final float altura = Config.ELEVADOR_ALTURA;
 
-    // Passageiros atualmente dentro do elevador
     private final List<Passageiro> passageirosABordo = new ArrayList<>();
 
-    // Estatisticas
     private volatile int totalPassageirosTransportados = 0;
 
-    // Configuracao de velocidade (pixels por segundo) e tempo de porta (segundos)
     private volatile float velocidadePixelsPorSegundo = Config.VELOCIDADE_PADRAO_PIXELS_SEG;
     private volatile float tempoTransicaoPortaSegundos = Config.TEMPO_TRANSICAO_PORTA_SEG;
 
@@ -86,19 +64,13 @@ public class Elevador implements Runnable {
         thread.interrupt();
     }
 
-    /**
-     * Loop principal da thread do elevador.
-     * Serve aos passageiros de forma ordenada, evitando starvation.
-     */
     @Override
     public void run() {
         while (executando && !Thread.currentThread().isInterrupted()) {
             try {
-                // 1. Determina se há chamados no prédio ou destinos dos passageiros a bordo
                 int proximoAndar = predio.determinarProximoAndar(andarAtual, direcao);
 
                 if (proximoAndar == -1) {
-                    // Sem requisições pendentes: elevador fica ocioso aguardando chamados
                     mutexElevador.acquire();
                     try {
                         direcao = Direcao.PARADO;
@@ -106,12 +78,10 @@ public class Elevador implements Runnable {
                         mutexElevador.release();
                     }
 
-                    // Bloqueia no semáforo até que um novo chamado seja feito no prédio
                     predio.aguardarNovasChamadas();
                     continue;
                 }
 
-                // 2. Atualiza a direção de movimento
                 mutexElevador.acquire();
                 try {
                     if (proximoAndar > andarAtual) {
@@ -123,20 +93,13 @@ public class Elevador implements Runnable {
                     mutexElevador.release();
                 }
 
-                // 3. Se o próximo andar for diferente do atual, viaja até ele
                 if (proximoAndar != andarAtual) {
                     VisitarAndar(proximoAndar);
                 }
 
-                // 4. Ao chegar ao andar, verifica se há operações a realizar (desembarque ou embarque)
                 if (predio.temOperacaoNoAndar(andarAtual, passageirosABordo)) {
-                    // Abre as portas
                     AbrirPorta();
-
-                    // Realiza os desembarques e embarques sincronizados por semáforos
                     predio.atenderAndar(andarAtual, this);
-
-                    // Fecha as portas
                     FecharPorta();
                 }
 
@@ -147,20 +110,11 @@ public class Elevador implements Runnable {
         }
     }
 
-    // =========================================================================
-    // MÉTODOS REQUISITADOS PELO ENUNCIADO (Internos do Elevador)
-    // =========================================================================
-
-    /**
-     * Visita um andar especificado, simulando o deslocamento físico.
-     * O elevador só se move com as portas rigorosamente fechadas.
-     */
     public void VisitarAndar(int andarDestino) throws InterruptedException {
         visitarAndar(andarDestino);
     }
 
     public void visitarAndar(int andarDestino) throws InterruptedException {
-        // Garantia: portas devem estar fechadas antes de iniciar o movimento
         if (estadoPorta != EstadoPorta.FECHADA) {
             fecharPorta();
         }
@@ -174,7 +128,7 @@ public class Elevador implements Runnable {
         }
 
         float targetY = calcularYDoAndar(andarDestino);
-        float stepTime = 0.016f; // ~60fps step (16ms)
+        float stepTime = 0.016f;
 
         while (Math.abs(posicaoY - targetY) > 1.0f) {
             float delta = velocidadePixelsPorSegundo * stepTime;
@@ -184,7 +138,6 @@ public class Elevador implements Runnable {
                 posicaoY = Math.max(posicaoY - delta, targetY);
             }
 
-            // Atualiza a posição dos passageiros a bordo para acompanharem o elevador
             atualizarPosicoesPassageirosABordo();
 
             Thread.sleep((long) (stepTime * 1000));
@@ -202,10 +155,6 @@ public class Elevador implements Runnable {
         atualizarPosicoesPassageirosABordo();
     }
 
-    /**
-     * Abre a porta do elevador.
-     * Só pode ser executado quando o elevador estiver parado no andar.
-     */
     public void AbrirPorta() throws InterruptedException {
         abrirPorta();
     }
@@ -221,7 +170,6 @@ public class Elevador implements Runnable {
             mutexElevador.release();
         }
 
-        // Animação gradual de abertura da porta
         int passos = 25;
         long tempoPorPasso = (long) ((tempoTransicaoPortaSegundos * 1000) / passos);
         for (int i = 1; i <= passos; i++) {
@@ -238,9 +186,6 @@ public class Elevador implements Runnable {
         }
     }
 
-    /**
-     * Fecha a porta do elevador.
-     */
     public void FecharPorta() throws InterruptedException {
         fecharPorta();
     }
@@ -253,7 +198,6 @@ public class Elevador implements Runnable {
             mutexElevador.release();
         }
 
-        // Animação gradual de fechamento da porta
         int passos = 25;
         long tempoPorPasso = (long) ((tempoTransicaoPortaSegundos * 1000) / passos);
         for (int i = passos - 1; i >= 0; i--) {
@@ -270,28 +214,14 @@ public class Elevador implements Runnable {
         }
     }
 
-    // =========================================================================
-    // CONTROLE DE PASSAGEIROS E VAGAS (Buffer de Capacidade N)
-    // =========================================================================
-
-    /**
-     * Tenta reservar uma vaga no elevador de forma não-bloqueante.
-     */
     public boolean tentarReservarVaga() {
         return semVagas.tryAcquire();
     }
 
-    /**
-     * Libera uma vaga no elevador (quando um passageiro desembarca).
-     */
     public void liberarVaga() {
         semVagas.release();
     }
 
-    /**
-     * Adiciona um passageiro à lista de passageiros a bordo.
-     * Protegido por mutexElevador (Semaphore).
-     */
     public void adicionarPassageiro(Passageiro p) throws InterruptedException {
         mutexElevador.acquire();
         try {
@@ -302,10 +232,6 @@ public class Elevador implements Runnable {
         }
     }
 
-    /**
-     * Remove um passageiro da lista de passageiros a bordo.
-     * Protegido por mutexElevador (Semaphore).
-     */
     public void removerPassageiro(Passageiro p) throws InterruptedException {
         mutexElevador.acquire();
         try {
@@ -317,9 +243,6 @@ public class Elevador implements Runnable {
         }
     }
 
-    /**
-     * Atualiza as posições gráficas dos passageiros dentro da cabine.
-     */
     private void atualizarPosicoesPassageirosABordo() {
         try {
             mutexElevador.acquire();
@@ -337,12 +260,13 @@ public class Elevador implements Runnable {
         int total = passageirosABordo.size();
         if (total == 0) return;
 
-        float espacamento = largura / (capacidade + 1);
+        float cabineBaseX = posicaoX + Config.CABINE_OFFSET_X;
+        float espacamento = Config.CABINE_LARGURA / (capacidade + 1);
         for (int i = 0; i < total; i++) {
             Passageiro p = passageirosABordo.get(i);
-            float offsetX = espacamento * (i + 1) - 22f; // centraliza o avatar (largura ~44px)
-            p.setPosX(posicaoX + offsetX);
-            p.setPosY(posicaoY + 12f);
+            float offsetX = espacamento * (i + 1) - Config.PASSAGEIRO_CABINE_LARGURA / 2f;
+            p.setPosX(cabineBaseX + offsetX);
+            p.setPosY(posicaoY + Config.CABINE_OFFSET_Y + 8f);
             p.setTargetX(p.getPosX());
             p.setTargetY(p.getPosY());
         }
@@ -351,10 +275,6 @@ public class Elevador implements Runnable {
     private float calcularYDoAndar(int andar) {
         return Config.calcularYAndar(andar);
     }
-
-    // =========================================================================
-    // GETTERS E MÉTODOS DE CONSULTA
-    // =========================================================================
 
     public int getCapacidade() {
         return capacidade;

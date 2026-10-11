@@ -25,7 +25,7 @@ public final class Config {
     public static final int ANDAR_INICIAL = 0;
 
     // Coordenadas verticais dos pisos
-    public static final float Y_BASE_ANDAR_0 = 15f;
+    public static final float Y_BASE_ANDAR_0 = 0f;
     public static final float ESPACAMENTO_ANDAR = 90f;
     public static final float OFFSET_PES_PASSAGEIRO = 14f;
 
@@ -38,37 +38,53 @@ public final class Config {
     }
 
     // =========================================================================
-    // 3. ELEVADOR, CABINE E PORTAS
+    // 3. ELEVADOR E CABINE (TAMANHO BASE CONFIGURAVEL)
     // =========================================================================
-    public static final float ELEVADOR_X = 145f;
-    public static final float ELEVADOR_LARGURA = 104f;
-    public static final float ELEVADOR_ALTURA = 104;
+    // Voce configura apenas o posicionamento e o tamanho base desejado:
+    public static final float ELEVADOR_X = 245f;
+    public static final float ELEVADOR_LARGURA = 120f;
+    public static final float ELEVADOR_ALTURA = 120f;
 
-    // Fundo da cabine interna (atras das portas)
-    public static final float CABINE_OFFSET_X = 22f;
-    public static final float CABINE_OFFSET_Y = 4f;
-    public static final float CABINE_LARGURA = 76f;
-    public static final float CABINE_ALTURA = 70f;
+    // Fundo da cabine interna (RECALCULADO AUTOMATICAMENTE na proporcao 1:1 da imagem 512x512)
+    public static final float CABINE_OFFSET_X = ELEVADOR_LARGURA * 0.20f;
+    public static final float CABINE_OFFSET_Y = ELEVADOR_ALTURA * 0.02f;
+    public static final float CABINE_LARGURA  = ELEVADOR_LARGURA * 0.60f;
+    public static final float CABINE_ALTURA   = ELEVADOR_ALTURA * 0.70f;
 
-    // Deslocamento maximo de abertura da porta
-    public static final float PORTA_SLIDE_MAX = 38f;
-
-    // Moldura do elevador (sobreposicao nas bordas)
-    public static final float MOLDURA_TOPO_OFFSET_Y = 68f;
-    public static final float MOLDURA_TOPO_LARGURA = 120f;
-    public static final float MOLDURA_TOPO_ALTURA = 18f;
-    public static final float MOLDURA_ESQ_LARGURA = 22f;
-    public static final float MOLDURA_ESQ_ALTURA = 86f;
-    public static final float MOLDURA_DIR_OFFSET_X = 98f;
-    public static final float MOLDURA_DIR_LARGURA = 22f;
-    public static final float MOLDURA_DIR_ALTURA = 86f;
+    // Moldura do elevador (RECALCULADA AUTOMATICAMENTE na proporcao 1:1 da imagem 512x512)
+    public static final float MOLDURA_TOPO_OFFSET_Y = ELEVADOR_ALTURA * 0.72f;
+    public static final float MOLDURA_TOPO_LARGURA  = ELEVADOR_LARGURA;
+    public static final float MOLDURA_TOPO_ALTURA   = ELEVADOR_ALTURA * 0.28f;
+    public static final float MOLDURA_ESQ_LARGURA   = ELEVADOR_LARGURA * 0.20f;
+    public static final float MOLDURA_ESQ_ALTURA    = ELEVADOR_ALTURA;
+    public static final float MOLDURA_DIR_OFFSET_X  = ELEVADOR_LARGURA * 0.80f;
+    public static final float MOLDURA_DIR_LARGURA   = ELEVADOR_LARGURA * 0.20f;
+    public static final float MOLDURA_DIR_ALTURA    = ELEVADOR_ALTURA;
 
     // Velocidades fisicas
     public static final float VELOCIDADE_PADRAO_PIXELS_SEG = 220f;
+
+    // =========================================================================
+    // 4. PORTAS DO ELEVADOR (CONFIGURACAO INDEPENDENTE)
+    // =========================================================================
+    // Voce configura apenas a largura e altura da porta (padrao: mesmo tamanho do elevador):
+    public static final float PORTA_LARGURA = ELEVADOR_LARGURA;
+    public static final float PORTA_ALTURA  = ELEVADOR_ALTURA;
+
+    // Posicionamento base das portas (offset em relacao ao elevador)
+    public static final float PORTA_OFFSET_X = 0f;
+    public static final float PORTA_OFFSET_Y = 0f;
+
+    // Ajustes finos opcionais para cada folha de porta
+    public static final float PORTA_ESQ_OFFSET_X = 0f;
+    public static final float PORTA_DIR_OFFSET_X = 35f;
+
+    // Deslocamento maximo de abertura (RECALCULADO AUTOMATICAMENTE em ~35% da largura da porta)
+    public static final float PORTA_SLIDE_MAX = PORTA_LARGURA * 0.35f;
     public static final float TEMPO_TRANSICAO_PORTA_SEG = 0.45f;
 
     // =========================================================================
-    // 4. PASSAGEIROS E FILAS
+    // 5. PASSAGEIROS E FILAS
     // =========================================================================
     // Dimensoes dos sprites de pedestres na fila
     public static final float PASSAGEIRO_LARGURA = 52f;
@@ -86,11 +102,15 @@ public final class Config {
     public static final float TEXTO_DESTINO_CABINE_OFFSET_X = -2f;
     public static final float TEXTO_DESTINO_CABINE_OFFSET_Y = 56f;
 
-    // Gerador de passageiros
+    // Gerador de passageiros e limite por andar
+    public static final int LIMITE_PASSAGEIROS_POR_ANDAR = 5;
     public static final long INTERVALO_GERACAO_MS = 2800;
 
+    // Saida do corredor apos desembarque
+    public static final float SAIDA_CORREDOR_X = 800f;
+
     // =========================================================================
-    // 5. PAINEL LATERAL A DIREITA
+    // 6. PAINEL LATERAL A DIREITA
     // =========================================================================
     // Retangulo de fundo
     public static final float PAINEL_BG_X = 1010f;
@@ -111,7 +131,7 @@ public final class Config {
     public static final float ESCALA_FONTE_PEQUENA = 0.85f;
 
     // =========================================================================
-    // 6. TEXTOS DO SISTEMA
+    // 7. TEXTOS DO SISTEMA
     // =========================================================================
     public static final String TITULO_APLICACAO = "Simulador de Elevador";
 
@@ -126,6 +146,7 @@ public final class Config {
     public static final String TEXTO_PASSAGEIROS = "Passageiros: ";
     public static final String TEXTO_TRANSPORTADOS = "Transportados: ";
     public static final String TEXTO_FILA_PREDIO = "Fila no predio: ";
+    public static final String TEXTO_LIMITE_POR_ANDAR = "Limite p/ andar: ";
     public static final String TEXTO_DESTINO_PREFIXO = "Dest: ";
 
     // Categoria Atalhos

@@ -25,9 +25,13 @@ Uma aplicação interativa de simulação de elevador predial multithread desenv
   - Geração manual de passageiros via teclado ou clique do mouse nos andares.
   - Ajuste de velocidade da simulação física em tempo real.
 
+- **Gerenciamento e Limite de Filas por Andar**:
+  - Limite configurável de pessoas aguardando por andar (`LIMITE_PASSAGEIROS_POR_ANDAR`), evitando saturação de memória e filas infinitas.
+  - Prevenção total de deadlocks e starvation com algoritmo LOOK/SCAN otimizado.
+
 ---
 
-## 🏗️ Arquitetura Concorrente
+## Arquitetura Concorrente
 
 | Componente | Papel Concorrente |
 | :--- | :--- |
@@ -65,7 +69,7 @@ gradlew.bat lwjgl3:run
 
 ---
 
-## 🎮 Controles
+## Controles
 
 | Tecla / Ação | Ação |
 | :---: | :--- |
@@ -78,7 +82,7 @@ gradlew.bat lwjgl3:run
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+## Tecnologias Utilizadas
 
 - **Linguagem**: Java 8+ / 17+
 - **Framework Gráfico**: [libGDX](https://libgdx.com/) (LWJGL3 Backend)

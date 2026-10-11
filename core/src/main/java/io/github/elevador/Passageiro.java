@@ -2,13 +2,6 @@ package io.github.elevador;
 
 import java.util.concurrent.Semaphore;
 
-/**
- * Representa um passageiro (pedestre) no sistema de elevador.
- * Cada passageiro é executado em sua própria thread dedicada.
- * 
- * Regra: Métodos synchronized NÃO são utilizados. A sincronização
- * é realizada exclusivamente com a classe Semaphore.
- */
 public class Passageiro implements Runnable {
 
     public enum Estado {
@@ -24,20 +17,17 @@ public class Passageiro implements Runnable {
     private final String nome;
     private final int andarOrigem;
     private final int andarDestino;
-    private final int spriteIndex; // 1 a 6 (pessoa1.png a pessoa6.png)
+    private final int spriteIndex;
     private final Predio predio;
     private final Thread thread;
 
-    // Semáforos individuais para sincronização estrita com o elevador
     private final Semaphore semPodeEmbarcar = new Semaphore(0, true);
     private final Semaphore semEmbarqueConcluido = new Semaphore(0, true);
     private final Semaphore semPodeDesembarcar = new Semaphore(0, true);
     private final Semaphore semDesembarqueConcluido = new Semaphore(0, true);
 
-    // Estado do passageiro
     private volatile Estado estado = Estado.CRIADO;
 
-    // Coordenadas visuais para interpolação gráfica suave
     private float posX;
     private float posY;
     private float targetX;
@@ -52,7 +42,6 @@ public class Passageiro implements Runnable {
         this.spriteIndex = spriteIndex;
         this.predio = predio;
 
-        // Posição inicial no andar de origem (calculada via Config)
         this.posY = Config.calcularYPassageiroNoAndar(andarOrigem);
         this.posX = 1200f; 
         this.targetX = Config.FILA_X_INICIAL;
@@ -67,34 +56,36 @@ public class Passageiro implements Runnable {
 
     @Override
     public void run() {
+        boolean aBordo = false;
         try {
-            // 1. Passageiro chega ao andar e chama o elevador
-            predio.chamarElevador(this);
+            if (!predio.chamarElevador(this)) {
+                return;
+            }
 
-            // 2. Aguarda a chegada do elevador com portas abertas e permissão para embarcar
             semPodeEmbarcar.acquire();
+            try {
+                predio.entrarElevador(this);
+                aBordo = true;
+            } finally {
+                semEmbarqueConcluido.release();
+            }
 
-            // 3. Embarca no elevador (interface externa)
-            predio.entrarElevador(this);
-
-            // Sinaliza para o elevador que o embarque foi concluído
-            semEmbarqueConcluido.release();
-
-            // 4. Aguarda a chegada ao andar de destino com portas abertas
             semPodeDesembarcar.acquire();
+            try {
+                predio.sairElevador(this);
+                aBordo = false;
+            } finally {
+                semDesembarqueConcluido.release();
+            }
 
-            // 5. Desembarca do elevador (interface externa)
-            predio.sairElevador(this);
-
-            // Sinaliza para o elevador que o desembarque foi concluído
-            semDesembarqueConcluido.release();
-
+            predio.caminharParaSaida(this);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            if (aBordo) {
+                predio.getElevador().liberarVaga();
+            }
         }
     }
-
-    // --- Getters e Setters de Semáforos e Estado ---
 
     public int getId() {
         return id;
@@ -143,8 +134,6 @@ public class Passageiro implements Runnable {
     public Thread getThread() {
         return thread;
     }
-
-    // --- Getters e Setters para Visualização Gráfica ---
 
     public float getPosX() {
         return posX;

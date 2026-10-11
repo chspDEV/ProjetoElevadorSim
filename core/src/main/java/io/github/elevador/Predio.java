@@ -6,39 +6,20 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
-/**
- * Representa o Prédio que gerencia os andares e o elevador.
- * 
- * Requisitos atendidos:
- * - Instância única da classe Prédio cria e inicializa o Elevador.
- * - Gerencia F > 5 andares (F = 8 andares: 0 a 7).
- * - Oferece a interface externa para os passageiros:
- *     - chamarElevador(Passageiro p)
- *     - entrarElevador(Passageiro p)
- *     - sairElevador(Passageiro p)
- * - Oferece os métodos internos de coordenação para o Elevador.
- * - Exclusão mútua e controle 100% baseados na classe Semaphore.
- * - ZERO métodos ou blocos synchronized.
- * - Evita starvation através de algoritmo justo LOOK/SCAN com semáforos justos.
- */
 public class Predio {
 
     private final int totalAndares;
     private final Elevador elevador;
 
-    // Filas de passageiros aguardando em cada andar (FIFO)
     @SuppressWarnings("unchecked")
     private final Queue<Passageiro>[] filasPorAndar;
 
-    // Histórico de passageiros que concluíram sua viagem
     private final List<Passageiro> passageirosConcluidos = new ArrayList<>();
 
-    // Mutex baseado em Semáforo binário para sincronização de acesso às filas e estado do prédio
-    // Substitui rigorosamente synchronized!
     private final Semaphore mutexPredio = new Semaphore(1, true);
 
-    // Semáforo para notificar o elevador quando surge uma nova chamada
     private final Semaphore semNovasChamadas = new Semaphore(0, true);
 
     public Predio(int totalAndares, int capacidadeElevador, int andarInicial) {
@@ -47,15 +28,11 @@ public class Predio {
         }
         this.totalAndares = totalAndares;
 
-        // Inicializa as filas para cada andar
         this.filasPorAndar = new LinkedList[totalAndares];
         for (int i = 0; i < totalAndares; i++) {
             this.filasPorAndar[i] = new LinkedList<>();
         }
 
-        // Conforme requisito do enunciado:
-        // "O programa deve primeiramente criar uma instância única da classe Prédio,
-        // a qual cria um objeto do tipo Elevador e o inicializa"
         this.elevador = new Elevador(this, capacidadeElevador, andarInicial);
     }
 
@@ -67,14 +44,7 @@ public class Predio {
         elevador.parar();
     }
 
-    // =========================================================================
-    // INTERFACE EXTERNA PARA OS PASSAGEIROS DO ELEVADOR
-    // =========================================================================
-
-    /**
-     * Interface externa: o passageiro chega ao andar e chama o elevador.
-     */
-    public void chamarElevador(Passageiro passageiro) throws InterruptedException {
+    public boolean chamarElevador(Passageiro passageiro) throws InterruptedException {
         int andar = passageiro.getAndarOrigem();
         if (andar < 0 || andar >= totalAndares) {
             throw new IllegalArgumentException("Andar inválido: " + andar);
@@ -82,24 +52,29 @@ public class Predio {
 
         mutexPredio.acquire();
         try {
+            if (filasPorAndar[andar].size() >= Config.LIMITE_PASSAGEIROS_POR_ANDAR) {
+                return false;
+            }
+
             passageiro.setEstado(Passageiro.Estado.AGUARDANDO_FILA);
             filasPorAndar[andar].add(passageiro);
             atualizarPosicoesFilaNoAndar(andar);
 
-            // Notifica o elevador que há uma nova chamada pendente
             semNovasChamadas.release();
+            return true;
         } finally {
             mutexPredio.release();
         }
     }
 
-    /**
-     * Interface externa: o passageiro entra no elevador (embarca).
-     */
+    public boolean podeAdicionarNaFila(int andar) {
+        if (andar < 0 || andar >= totalAndares) return false;
+        return getQuantidadeFila(andar) < Config.LIMITE_PASSAGEIROS_POR_ANDAR;
+    }
+
     public void entrarElevador(Passageiro passageiro) throws InterruptedException {
         passageiro.setEstado(Passageiro.Estado.EMBARCANDO);
 
-        // Caminha até a cabine do elevador
         float startX = passageiro.getPosX();
         float targetX = elevador.getPosicaoX() + 30f;
         int passos = 15;
@@ -119,26 +94,11 @@ public class Predio {
         }
     }
 
-    /**
-     * Interface externa: o passageiro sai do elevador no andar de destino (desembarca).
-     */
     public void sairElevador(Passageiro passageiro) throws InterruptedException {
         passageiro.setEstado(Passageiro.Estado.DESEMBARCANDO);
 
-        // Remove do elevador e libera a vaga no buffer
         elevador.removerPassageiro(passageiro);
         elevador.liberarVaga();
-
-        // Caminha para fora da cabine no andar de destino
-        float startX = elevador.getPosicaoX() + 30f;
-        float targetX = 600f; // caminha para a direita no andar
-        int passos = 20;
-        for (int i = 1; i <= passos; i++) {
-            passageiro.setPosX(startX + (targetX - startX) * ((float) i / passos));
-            Thread.sleep(15);
-        }
-
-        passageiro.setEstado(Passageiro.Estado.CONCLUIDO);
 
         mutexPredio.acquire();
         try {
@@ -146,70 +106,81 @@ public class Predio {
         } finally {
             mutexPredio.release();
         }
+
+        float startX = passageiro.getPosX();
+        float saidaCabineX = Config.ELEVADOR_X + Config.ELEVADOR_LARGURA + 10f;
+        int passos = 8;
+        for (int i = 1; i <= passos; i++) {
+            passageiro.setPosX(startX + (saidaCabineX - startX) * ((float) i / passos));
+            Thread.sleep(15);
+        }
     }
 
-    // =========================================================================
-    // MÉTODOS DE COORDENAÇÃO INTERNA PARA O ELEVADOR
-    // =========================================================================
+    public void caminharParaSaida(Passageiro passageiro) throws InterruptedException {
+        float startX = passageiro.getPosX();
+        float targetX = Config.SAIDA_CORREDOR_X;
+        int passos = 35;
+        for (int i = 1; i <= passos; i++) {
+            passageiro.setPosX(startX + (targetX - startX) * ((float) i / passos));
+            Thread.sleep(16);
+        }
 
-    /**
-     * Bloqueia a thread do elevador até que haja um chamado pendente no prédio.
-     */
-    public void aguardarNovasChamadas() throws InterruptedException {
-        semNovasChamadas.acquire();
-    }
+        passageiro.setEstado(Passageiro.Estado.CONCLUIDO);
 
-    /**
-     * Algoritmo SCAN/LOOK para decidir o próximo andar a visitar de forma ordenada,
-     * garantindo 100% de prevenção de starvation!
-     */
-    public int determinarProximoAndar(int andarAtual, Elevador.Direcao direcaoAtual) throws InterruptedException {
         mutexPredio.acquire();
         try {
-            List<Passageiro> aBordo = elevador.getCopiaPassageirosABordo();
+            passageirosConcluidos.remove(passageiro);
+        } finally {
+            mutexPredio.release();
+        }
+    }
 
+    public void aguardarNovasChamadas() throws InterruptedException {
+        semNovasChamadas.tryAcquire(250, TimeUnit.MILLISECONDS);
+    }
+
+    public int determinarProximoAndar(int andarAtual, Elevador.Direcao direcaoAtual) throws InterruptedException {
+        List<Passageiro> aBordo = elevador.getCopiaPassageirosABordo();
+        boolean elevadorCheio = (aBordo.size() >= elevador.getCapacidade());
+
+        mutexPredio.acquire();
+        try {
             boolean[] chamados = new boolean[totalAndares];
             int totalRequisicoes = 0;
 
-            // Destinos dos passageiros a bordo
             for (Passageiro p : aBordo) {
                 chamados[p.getAndarDestino()] = true;
                 totalRequisicoes++;
             }
 
-            // Andares com pessoas aguardando na fila
-            for (int i = 0; i < totalAndares; i++) {
-                if (!filasPorAndar[i].isEmpty()) {
-                    chamados[i] = true;
-                    totalRequisicoes++;
+            if (!elevadorCheio) {
+                for (int i = 0; i < totalAndares; i++) {
+                    if (!filasPorAndar[i].isEmpty()) {
+                        chamados[i] = true;
+                        totalRequisicoes++;
+                    }
                 }
             }
 
             if (totalRequisicoes == 0) {
-                return -1; // Sem requisições
+                return -1;
             }
 
-            // Se há requisição no próprio andar atual
             if (chamados[andarAtual]) {
                 return andarAtual;
             }
 
-            // Algoritmo LOOK/SCAN:
             if (direcaoAtual == Elevador.Direcao.SUBINDO || direcaoAtual == Elevador.Direcao.PARADO) {
-                // Procura o menor andar acima com chamado
                 for (int i = andarAtual + 1; i < totalAndares; i++) {
                     if (chamados[i]) return i;
                 }
-                // Se não há nenhum acima, inverte e procura o maior andar abaixo
                 for (int i = andarAtual - 1; i >= 0; i--) {
                     if (chamados[i]) return i;
                 }
-            } else { // DESCENDO
-                // Procura o maior andar abaixo com chamado
+            } else {
                 for (int i = andarAtual - 1; i >= 0; i--) {
                     if (chamados[i]) return i;
                 }
-                // Se não há nenhum abaixo, inverte e procura o menor andar acima
                 for (int i = andarAtual + 1; i < totalAndares; i++) {
                     if (chamados[i]) return i;
                 }
@@ -221,32 +192,24 @@ public class Predio {
         }
     }
 
-    /**
-     * Verifica se o elevador deve parar no andar para desembarcar ou embarcar passageiros.
-     */
     public boolean temOperacaoNoAndar(int andar, List<Passageiro> passageirosABordo) throws InterruptedException {
         mutexPredio.acquire();
         try {
-            // Verifica se algum passageiro a bordo deseja descer aqui
             for (Passageiro p : passageirosABordo) {
                 if (p.getAndarDestino() == andar) {
                     return true;
                 }
             }
-            // Verifica se há passageiros aguardando para subir neste andar
-            return !filasPorAndar[andar].isEmpty();
+            if (passageirosABordo.size() < elevador.getCapacidade()) {
+                return !filasPorAndar[andar].isEmpty();
+            }
+            return false;
         } finally {
             mutexPredio.release();
         }
     }
 
-    /**
-     * Coordena o processo de desembarque e embarque no andar de forma sincronizada por Semáforos.
-     * Primeiro desembarcam todos os que têm este andar como destino.
-     * Depois embarcam os que estão na fila, respeitando a capacidade máxima do elevador.
-     */
     public void atenderAndar(int andar, Elevador elevador) throws InterruptedException {
-        // --- 1. PROCESSO DE DESEMBARQUE ---
         List<Passageiro> aBordo = elevador.getCopiaPassageirosABordo();
         List<Passageiro> saindo = new ArrayList<>();
         for (Passageiro p : aBordo) {
@@ -256,21 +219,21 @@ public class Predio {
         }
 
         for (Passageiro p : saindo) {
-            // Autoriza a thread do passageiro a desembarcar
             p.getSemPodeDesembarcar().release();
 
-            // Aguarda a confirmação de que o passageiro concluiu a saída
-            p.getSemDesembarqueConcluido().acquire();
+            boolean ok = p.getSemDesembarqueConcluido().tryAcquire(2000, TimeUnit.MILLISECONDS);
+            if (!ok) {
+                elevador.removerPassageiro(p);
+                elevador.liberarVaga();
+            }
         }
 
-        // --- 2. PROCESSO DE EMBARQUE ---
         while (true) {
             Passageiro proximo = null;
 
             mutexPredio.acquire();
             try {
                 if (!filasPorAndar[andar].isEmpty()) {
-                    // Tenta obter uma vaga no elevador através do semáforo de vagas
                     if (elevador.tentarReservarVaga()) {
                         proximo = filasPorAndar[andar].poll();
                     }
@@ -280,24 +243,20 @@ public class Predio {
             }
 
             if (proximo == null) {
-                // Ou a fila acabou, ou o elevador atingiu a capacidade máxima
                 break;
             }
 
-            // Autoriza a thread do passageiro a embarcar
             proximo.getSemPodeEmbarcar().release();
 
-            // Aguarda a confirmação de que o passageiro concluiu a entrada
-            proximo.getSemEmbarqueConcluido().acquire();
+            boolean ok = proximo.getSemEmbarqueConcluido().tryAcquire(2000, TimeUnit.MILLISECONDS);
+            if (!ok) {
+                elevador.liberarVaga();
+            }
         }
 
-        // Pequena pausa natural de segurança com as portas abertas antes de fechar
         Thread.sleep(300);
     }
 
-    /**
-     * Reorganiza graficamente as posições dos passageiros na fila do andar.
-     */
     private void atualizarPosicoesFilaNoAndar(int andar) {
         int idx = 0;
         for (Passageiro p : filasPorAndar[andar]) {
@@ -305,16 +264,10 @@ public class Predio {
             float targetY = Config.calcularYPassageiroNoAndar(andar);
             p.setTargetX(targetX);
             p.setTargetY(targetY);
-            if (p.getPosX() > 1100f) {
-                p.setPosX(targetX + 60f); // entra suavemente vindo da direita
-            }
+            p.setPosX(targetX);
             idx++;
         }
     }
-
-    // =========================================================================
-    // GETTERS E MÉTODOS DE CONSULTA
-    // =========================================================================
 
     public int getTotalAndares() {
         return totalAndares;

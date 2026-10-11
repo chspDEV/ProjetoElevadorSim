@@ -1,9 +1,5 @@
 package io.github.elevador;
 
-/**
- * Programa de teste executável via console/terminal para validação do sistema
- * de controle de elevador multithread com semáforos.
- */
 public class ProgramaTesteConsole {
 
     public static void main(String[] args) {
@@ -19,20 +15,16 @@ public class ProgramaTesteConsole {
         int capacidade = 4;
         int andarInicial = 0;
 
-        // 1. Instância única da classe Prédio cria e inicializa o Elevador
         Predio predio = new Predio(totalAndares, capacidade, andarInicial);
         Elevador elevador = predio.getElevador();
 
-        // 2. Inicia o loop da thread do elevador
         predio.iniciarSimulacao();
         System.out.println("[SISTEMA] Elevador iniciado no andar " + andarInicial + " com capacidade " + capacidade);
 
-        // 3. Inicia o gerador de passageiros em threads
         GeradorPassageiros gerador = new GeradorPassageiros(predio);
         gerador.iniciar();
         System.out.println("[SISTEMA] Gerador de passageiros em threads ativado.");
 
-        // Monitor de console executando por 15 segundos para demonstração
         try {
             for (int i = 0; i < 15; i++) {
                 Thread.sleep(1000);

@@ -16,11 +16,6 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import java.io.File;
 import java.util.List;
 
-/**
- * Aplicacao grafica principal em LibGDX para simulacao do elevador multithread.
- * Utiliza a classe estatica Config para todos os parametros de ajustes finos:
- * dimensoes de sprites, posicoes de elementos, textos e escalas de fontes.
- */
 public class Main extends ApplicationAdapter {
 
     private Predio predio;
@@ -35,9 +30,10 @@ public class Main extends ApplicationAdapter {
 
     private Texture texFundo;
     private Texture texElevador;
-    private Texture texPorta;
-    private TextureRegion regPortaEsq;
-    private TextureRegion regPortaDir;
+    private Texture texPortaL;
+    private Texture texPortaR;
+    private TextureRegion regPortaL;
+    private TextureRegion regPortaR;
     private TextureRegion regElevadorTopo;
     private TextureRegion regElevadorEsq;
     private TextureRegion regElevadorDir;
@@ -88,7 +84,6 @@ public class Main extends ApplicationAdapter {
         batch = new SpriteBatch();
         shapeRenderer = new ShapeRenderer();
 
-        // Fontes configuradas pela classe Config (todas com a mesma cor branca)
         fontPadrao = new BitmapFont();
         fontPadrao.getData().setScale(Config.ESCALA_FONTE_PADRAO);
         fontPadrao.setColor(Color.WHITE);
@@ -101,21 +96,20 @@ public class Main extends ApplicationAdapter {
         fontPequena.getData().setScale(Config.ESCALA_FONTE_PEQUENA);
         fontPequena.setColor(Color.WHITE);
 
-        // Texturas
         texFundo = new Texture(resolverArquivo("background1280x720.png"));
         texElevador = new Texture(resolverArquivo("elevador.png"));
 
-        // Sprite da porta adicionado pelo usuario (elevadorPorta.png)
-        texPorta = new Texture(resolverArquivo("elevadorPorta.png"));
-        regPortaEsq = new TextureRegion(texPorta);
-        regPortaDir = new TextureRegion(texPorta);
-        regPortaDir.flip(true, false);
+        texPortaL = new Texture(resolverArquivo("elevadorPortaL.png"));
+        texPortaR = new Texture(resolverArquivo("elevadorPortaR.png"));
+        regPortaL = new TextureRegion(texPortaL);
+        regPortaR = new TextureRegion(texPortaR);
+        regPortaR.flip(true, false);
 
         int ew = texElevador.getWidth();
         int eh = texElevador.getHeight();
-        regElevadorTopo = new TextureRegion(texElevador, 0, 0, ew, (int) (eh * 0.22f));
-        regElevadorEsq = new TextureRegion(texElevador, 0, 0, (int) (ew * 0.18f), eh);
-        regElevadorDir = new TextureRegion(texElevador, (int) (ew * 0.82f), 0, (int) (ew * 0.18f), eh);
+        regElevadorTopo = new TextureRegion(texElevador, 0, 0, ew, (int) (eh * 0.28f));
+        regElevadorEsq = new TextureRegion(texElevador, 0, 0, (int) (ew * 0.20f), eh);
+        regElevadorDir = new TextureRegion(texElevador, (int) (ew * 0.80f), 0, (int) (ew * 0.20f), eh);
 
         texPessoas = new Texture[6];
         for (int i = 0; i < 6; i++) {
@@ -142,15 +136,11 @@ public class Main extends ApplicationAdapter {
 
         ScreenUtils.clear(0.08f, 0.10f, 0.15f, 1f);
 
-        // Fundo com os andares
         batch.begin();
         batch.draw(texFundo, 0, 0, Config.LARGURA_TELA, Config.ALTURA_TELA);
         batch.end();
 
-        // Elementos geometricos simples (fundo escuro plano para o painel e interior da cabine)
         desenharGeometria();
-
-        // Sprites e Textos
         desenharSpritesETextos();
     }
 
@@ -237,10 +227,15 @@ public class Main extends ApplicationAdapter {
                     p.getPosY() + Config.TEXTO_DESTINO_CABINE_OFFSET_Y);
         }
 
-        // 2. DESENHA AS PORTAS DESLIZANDO (USANDO O SPRITE elevadorPorta.png)
+        // 2. DESENHA AS PORTAS INDIVIDUAIS DESLIZANDO (dimensoes e posicoes separadas do elevador)
+        float portaBaseX = elevX + Config.PORTA_OFFSET_X;
+        float portaBaseY = elevY + Config.PORTA_OFFSET_Y;
+        float portaW = Config.PORTA_LARGURA;
+        float portaH = Config.PORTA_ALTURA;
         float slide = Config.PORTA_SLIDE_MAX * abertura;
-        batch.draw(regPortaEsq, elevX - slide, elevY, elevW, elevH);
-        batch.draw(regPortaDir, elevX + slide, elevY, elevW, elevH);
+
+        batch.draw(regPortaL, portaBaseX + Config.PORTA_ESQ_OFFSET_X - slide, portaBaseY, portaW, portaH);
+        batch.draw(regPortaR, portaBaseX + Config.PORTA_DIR_OFFSET_X + slide, portaBaseY, portaW, portaH);
 
         // 3. DESENHA A MOLDURA EXTERNA DO ELEVADOR (TOPO E LATERAIS)
         batch.draw(regElevadorTopo, elevX, elevY + Config.MOLDURA_TOPO_OFFSET_Y, Config.MOLDURA_TOPO_LARGURA, Config.MOLDURA_TOPO_ALTURA);
@@ -268,12 +263,13 @@ public class Main extends ApplicationAdapter {
 
         // 5. PASSAGEIROS DESEMBARCANDO / CONCLUIDOS
         List<Passageiro> concluidos = predio.getCopiaPassageirosConcluidos();
-        int startIndex = Math.max(0, concluidos.size() - 6);
-        for (int i = startIndex; i < concluidos.size(); i++) {
-            Passageiro p = concluidos.get(i);
-            if (p.getEstado() == Passageiro.Estado.CONCLUIDO && p.getPosX() < 900f) {
+        for (Passageiro p : concluidos) {
+            if (p.getPosX() < Config.SAIDA_CORREDOR_X) {
                 int spriteIdx = Math.max(0, Math.min(5, p.getSpriteIndex() - 1));
-                batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY(), Config.PASSAGEIRO_LARGURA, Config.PASSAGEIRO_ALTURA);
+                float bobY = (p.getEstado() == Passageiro.Estado.DESEMBARCANDO)
+                        ? (float) Math.sin(tempoAnimacao * 14) * 3f
+                        : 0f;
+                batch.draw(texPessoas[spriteIdx], p.getPosX(), p.getPosY() + bobY, Config.PASSAGEIRO_LARGURA, Config.PASSAGEIRO_ALTURA);
             }
         }
 
@@ -320,6 +316,9 @@ public class Main extends ApplicationAdapter {
         y -= Config.ESPACAMENTO_LINHA_TEXTO;
 
         fontPadrao.draw(batch, Config.TEXTO_FILA_PREDIO + predio.getTotalPassageirosEmEspera(), x, y);
+        y -= Config.ESPACAMENTO_LINHA_TEXTO;
+
+        fontPadrao.draw(batch, Config.TEXTO_LIMITE_POR_ANDAR + Config.LIMITE_PASSAGEIROS_POR_ANDAR, x, y);
         y -= Config.ESPACAMENTO_ENTRE_CATEGORIAS;
 
         // CATEGORIA: ATALHOS
@@ -356,7 +355,8 @@ public class Main extends ApplicationAdapter {
 
         texFundo.dispose();
         texElevador.dispose();
-        if (texPorta != null) texPorta.dispose();
+        if (texPortaL != null) texPortaL.dispose();
+        if (texPortaR != null) texPortaR.dispose();
         for (Texture t : texPessoas) {
             if (t != null) t.dispose();
         }
